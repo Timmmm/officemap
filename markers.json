@@ -1,0 +1,25 @@
+{
+    "people": [
+        {
+            "x": 628,
+            "y": 427,
+            "name": "Tim",
+            "slack": "",
+            "photo": "Tim.jpg",
+            "title": "Map Maker",
+            "notes": "",
+            "hours": "",
+            "phone": "1"
+        }
+    ],
+    "things": [
+    ],
+    "access_points": [
+        {
+            "mac": "80:bb:cc:dd:ee:aa",
+            "x": 492,
+            "y": 375,
+            "name": "AP01 - IT"
+        }
+    ]
+}

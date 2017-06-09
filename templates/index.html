@@ -1,0 +1,209 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+	
+	<title>Office Map</title>
+
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	
+<!--	<link rel="shortcut icon" type="image/x-icon" href="docs/images/favicon.ico" /> -->
+
+	<link rel="stylesheet" href="/static/leaflet/leaflet.css"/>
+	<script src="/static/leaflet/leaflet-src.js"></script>
+
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+	<script src="/static/leaflet-coordinates/Leaflet.Coordinates-0.1.5.src.js"></script>
+	<link rel="stylesheet" href="/static/leaflet-coordinates/Leaflet.Coordinates-0.1.5.css"/>
+	<script src="/static/leaflet-search/leaflet-search.src.js"></script>
+	<link rel="stylesheet" href="/static/leaflet-search/leaflet-search.src.css"/>
+
+	<!-- Like JQuery -->
+	<script src="/static/minified.js"></script>
+
+	<script>
+		var MINI = require('minified');
+		var _=MINI._, $=MINI.$, $$=MINI.$$, EE=MINI.EE, HTML=MINI.HTML;
+	</script>
+	
+	<script>
+
+		function poll(url, element_item)
+		{
+			$.request("get", url)
+				.then(function success(result) {
+					$(element_item).fill(result);
+					if ($(element_item).length)
+						setTimeout(poll, 250, url, element_item);			
+				})
+				.error(function(status, statusText, responseText) {
+					if ($(element_item).length)
+						setTimeout(poll, 250, url, element_item);
+				});;
+		}
+
+	</script>
+
+	<style>
+		#map {
+			width: 100vw;
+			height: 100vh;
+		}
+
+		/* HTML body has a default margin of 8 px. This lets us get to the edge
+		of the screen and have no scroll bars. */
+		body {
+			margin: 0;
+		}
+
+		/* Set the map backgorund colour. Default is gray. */
+		.leaflet-container {
+			background: white;
+		}
+
+	</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<script>
+
+	// Printer icon.
+	let printerIcon = L.icon({
+		iconUrl: "/static/printer.png",
+		shadowUrl: "/static/printer_shadow.png",
+
+		iconSize: [128/3, 128/3], // size of the icon
+		shadowSize: [156/3, 83/3], // size of the shadow
+		iconAnchor: [64/3, 64/3], // point of the icon which will correspond to marker's location
+		shadowAnchor: [50/3, 25/3],  // the same for the shadow
+		popupAnchor: [0/3, -50/3] // point from which the popup should open relative to the iconAnchor
+	});
+
+	let peopleLayer = new L.LayerGroup();
+	let printersLayer = new L.LayerGroup();
+	let roomsLayer = new L.LayerGroup();
+	let thingsLayer = new L.LayerGroup();
+
+	let peopleIcons = [];
+
+	{{ range .People }}
+		{
+			let personIcon = L.icon({
+				iconUrl: "/static/headshots/{{ .Photo }}",
+				shadowUrl: "/static/headshot_shadow.png",
+
+				// Full size:
+				// iconSize: [100, 100], // size of the icon
+				// shadowSize: [123, 76], // size of the shadow
+				// iconAnchor: [50, 50], // point of the icon which will correspond to marker's location
+				// shadowAnchor: [30, 20],  // the same for the shadow
+				// popupAnchor: [0, -50] // point from which the popup should open relative to the iconAnchor
+				iconSize: [100/2, 100/2], // size of the icon
+				shadowSize: [123/2, 76/2], // size of the shadow
+				iconAnchor: [50/2, 50/2], // point of the icon which will correspond to marker's location
+				shadowAnchor: [30/2, 20/2],  // the same for the shadow
+				popupAnchor: [0/2, -50/2] // point from which the popup should open relative to the iconAnchor
+			});
+
+			peopleIcons.push(personIcon);
+
+			L.marker([ {{ .Y }}, {{ .X }}], { icon: personIcon, title: {{ .Name }} })
+				.bindPopup("<h3>{{ .Name }}</h3><p>Title: {{ .Title }}</p><p>Phone: {{ .Phone }}</p><p>Notes: {{ .Notes }}</p><p><a href='#' onclick='findPerson(\"{{ .Name }}\"); return false;'>Find!</a></p>")
+				.addTo(peopleLayer);
+		}
+	{{ end }}
+	{{ range .Printers }}
+		L.marker([ {{ .Y }}, {{ .X }}], { icon: printerIcon }).bindPopup("<h3>{{ .Name }}</h3><p>{{ .Notes}}</p>").addTo(printersLayer);
+	{{ end }}
+	{{ range .Rooms }}
+		L.marker([ {{ .Y }}, {{ .X }}]).bindPopup("<h3>{{ .Name }}</h3>{{ if .Photo }}<img src=\"/static/{{ .Photo }}\"/>{{ end }}<p>{{ .Notes}}</p>").addTo(roomsLayer);
+	{{ end }}
+	{{ range .Things }}
+		L.marker([ {{ .Y }}, {{ .X }}]).bindPopup({{ .Label }}).addTo(thingsLayer);
+	{{ end }}
+
+
+	let bounds = [[0, 0], [706, 1000]];
+	let baseLayer = L.imageOverlay("/static/map.png", bounds);
+
+	let map = L.map("map", {
+		crs: L.CRS.Simple,
+		layers: [
+			baseLayer,
+			peopleLayer,
+			printersLayer,
+			roomsLayer,
+			thingsLayer
+			],
+	});
+	map.fitBounds(bounds);
+
+	// Coordinate control. Note you need to comment out the `pos = pos.wrap();`
+	// on line 263 of Leaflet.Coordinates-0.1.5.src.js to make the X coordinate
+	// work properly.
+	L.control.coordinates({
+		position: "bottomleft",
+		decimals: 0,
+		decimalSeperator: ".",
+		labelTemplateLat: "Y: {y}",
+		labelTemplateLng: "X: {x}"
+	}).addTo(map);
+
+	let markerLayers = {
+		"People": peopleLayer,
+		"Printers": printersLayer,
+		"Rooms": roomsLayer,
+		"Other": thingsLayer
+	};
+
+	// Layers control.
+	L.control.layers(null, markerLayers).addTo(map);
+
+	// Add search control.
+	map.addControl( new L.Control.Search({
+		layer: peopleLayer,
+		initial: false,
+		zoom: 3,
+		marker: false,
+		collapsed: false
+	}) );
+
+	// TODO: Now handle changing the people marker sizes when we zoom.
+	// map.on("zoomend", function() {
+	// 	for (let icon in peopleIcons) {
+	// 		let scale = map.getZoom();
+	// 		icon.iconSize = [100 * scale, 100 * scale], // size of the icon
+	// 		icon.shadowSize = [123 * scale, 76 * scale], // size of the shadow
+	// 		icon.iconAnchor = [50 * scale, 50 * scale], // point of the icon which will correspond to marker's location
+	// 		icon.shadowAnchor = [30 * scale, 20 * scale],  // the same for the shadow
+	// 		icon.popupAnchor = [0 * scale, -50 * scale] // point from which the popup should open relative to the iconAnchor
+	// 	}
+	// });
+
+	function findPerson(name) {
+		console.log("Finding: " + name);
+
+		$.request("get", "/api/find_person", { name: name })
+			.then(function success(result) {
+				let loc = $.parseJSON(result);
+				if (loc.x && loc.y) {
+					let circ = L.circle([loc.x, loc.y], {radius: 100}).addTo(map);
+					map.flyTo([loc.x, loc.y], 2);
+					// Remove it after some seconds.
+					setTimeout(function() { circ.remove() }, 20000);
+				} else {
+					alert("Couldn't find " + name + ". Sorry :-(");
+				}
+			})
+			.error(function(status, statusText, responseText) {
+				alert("Couldn't find " + name + ". Sorry :-(");
+			});;
+	}
+
+</script>
+
+</body>
+</html>
